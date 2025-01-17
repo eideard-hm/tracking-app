@@ -1,4 +1,11 @@
-import { Component, inject, OnDestroy, OnInit } from '@angular/core';
+import {
+  Component,
+  type ElementRef,
+  inject,
+  OnDestroy,
+  OnInit,
+  viewChild,
+} from '@angular/core';
 
 import {
   IonContent,
@@ -8,10 +15,9 @@ import {
 } from '@ionic/angular/standalone';
 
 import mapboxgl from 'mapbox-gl';
-import type { Subscription } from 'rxjs';
 
-import { environment } from '@environments/environment';
 import { LocationService } from '@services/location.service';
+import { environment } from '@environments/environment';
 
 @Component({
   selector: 'app-tab1',
@@ -19,41 +25,48 @@ import { LocationService } from '@services/location.service';
   imports: [IonHeader, IonToolbar, IonTitle, IonContent],
 })
 export class Tab1Page implements OnInit, OnDestroy {
+  readonly mapContainer =
+    viewChild.required<ElementRef<HTMLDivElement>>('mapContainer');
+
   private readonly _locationSvc = inject(LocationService);
+  private _watchId: string | null = null;
+  private map!: mapboxgl.Map;
+  private marker!: mapboxgl.Marker;
 
-  map!: mapboxgl.Map;
-  marker!: mapboxgl.Marker;
-  subscription?: Subscription;
-
-  constructor() {}
-
-  async ngOnInit() {
-    await this.initializeMap();
+  ngOnInit() {
+    this.initializeMap();
     this.startTracking();
   }
 
-  async initializeMap() {
-    // Configurar el token de Mapbox
+  private async initializeMap() {
     (mapboxgl as any).accessToken = environment.mapboxAccessToken;
 
-    // Obtener la ubicación inicial
     const coordinates = await this.getCurrentPosition();
+    console.log({ coordinates });
 
-    // Crear el mapa
     this.map = new mapboxgl.Map({
-      container: 'map', // ID del contenedor en el HTML
-      style: 'mapbox://styles/mapbox/streets-v11', // Estilo del mapa
-      center: [coordinates.lng, coordinates.lat], // Centrar el mapa en las coordenadas iniciales
-      zoom: 14, // Nivel de zoom inicial
+      container: this.mapContainer().nativeElement,
+      style: 'mapbox://styles/mapbox/streets-v11',
+      center: [coordinates.lng, coordinates.lat],
+      zoom: 14,
     });
 
-    // Agregar un marcador inicial
-    this.marker = new mapboxgl.Marker()
+    const popup = new mapboxgl.Popup({ className: 'text-black' }).setHTML(
+      `
+      <h6>Aquí estoy</h6>
+      <span>Estoy en este lugar del mundo</span>
+      `
+    );
+
+    this.marker = new mapboxgl.Marker({
+      color: '#3880ff',
+    })
       .setLngLat([coordinates.lng, coordinates.lat])
+      .setPopup(popup)
       .addTo(this.map);
   }
 
-  async getCurrentPosition(): Promise<{ lat: number; lng: number }> {
+  private async getCurrentPosition(): Promise<{ lat: number; lng: number }> {
     const { lat, lng } = await this._locationSvc.getCurrentLocation();
     return {
       lat,
@@ -61,30 +74,25 @@ export class Tab1Page implements OnInit, OnDestroy {
     };
   }
 
-  startTracking() {
-    // Inicia el seguimiento de la ubicación
-    this._locationSvc.watchLocation((coords) => {
-      // Actualizar el mapa con las nuevas coordenadas
+  private async startTracking() {
+    this._watchId = await this._locationSvc.watchLocation((coords) => {
       this.updateMap(coords.lat, coords.lng);
     });
   }
 
   updateMap(lat: number, lng: number) {
     if (this.marker) {
-      // Mover el marcador a las nuevas coordenadas
       this.marker.setLngLat([lng, lat]);
     }
 
     if (this.map) {
-      // Opcional: Centrar el mapa en la nueva posición
       this.map.flyTo({ center: [lng, lat], zoom: 14 });
     }
   }
 
   ngOnDestroy() {
-    // Detener el seguimiento al salir de la página
-    if (this.subscription) {
-      this.subscription.unsubscribe();
+    if (this._watchId) {
+      this._locationSvc.clearWatch(this._watchId);
     }
   }
 }

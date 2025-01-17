@@ -6,9 +6,32 @@ import { Geolocation } from '@capacitor/geolocation';
   providedIn: 'root',
 })
 export class LocationService {
-  // Obtener la ubicación actual
+  private async ensurePermissions(): Promise<boolean> {
+    try {
+      const permissions = await Geolocation.checkPermissions();
+
+      if (permissions.location === 'granted') {
+        return true;
+      }
+
+      const request = await Geolocation.requestPermissions();
+      return request.location === 'granted';
+    } catch (error) {
+      console.error(
+        'Error al verificar o solicitar permisos de ubicación:',
+        error
+      );
+      return false;
+    }
+  }
+
   async getCurrentLocation(): Promise<{ lat: number; lng: number }> {
     try {
+      const hasPermission = await this.ensurePermissions();
+      if (!hasPermission) {
+        throw new Error('Permiso de ubicación no otorgado');
+      }
+
       const position = await Geolocation.getCurrentPosition();
       return {
         lat: position.coords.latitude,
@@ -20,30 +43,44 @@ export class LocationService {
     }
   }
 
-  // Monitorear ubicación en tiempo real
-  watchLocation(callback: (coords: { lat: number; lng: number }) => void) {
-    const watchId = Geolocation.watchPosition(
-      { enableHighAccuracy: true },
-      (position, err) => {
-        if (err) {
-          console.error('Error monitoreando la ubicación:', err);
-          return;
-        }
-
-        if (position) {
-          callback({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          });
-        }
+  async watchLocation(
+    callback: (coords: { lat: number; lng: number }) => void
+  ): Promise<string | null> {
+    try {
+      const hasPermission = await this.ensurePermissions();
+      if (!hasPermission) {
+        throw new Error('Permiso de ubicación no otorgado');
       }
-    );
 
-    return watchId; // Devuelve el ID para detener el monitoreo si es necesario
+      const watchId = Geolocation.watchPosition(
+        { enableHighAccuracy: true },
+        (position, err) => {
+          if (err) {
+            console.error('Error monitoreando la ubicación:', err);
+            return;
+          }
+
+          if (position) {
+            callback({
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            });
+          }
+        }
+      );
+
+      return watchId;
+    } catch (error) {
+      console.error('Error al iniciar el monitoreo de ubicación:', error);
+      return null;
+    }
   }
 
-  // Detener el monitoreo de la ubicación
   clearWatch(watchId: string) {
-    Geolocation.clearWatch({ id: watchId });
+    try {
+      Geolocation.clearWatch({ id: watchId });
+    } catch (error) {
+      console.error('Error al detener el monitoreo de ubicación:', error);
+    }
   }
 }
