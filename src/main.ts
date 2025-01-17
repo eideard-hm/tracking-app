@@ -1,4 +1,8 @@
-import { provideHttpClient, withFetch } from '@angular/common/http';
+import {
+  provideHttpClient,
+  withFetch,
+  withInterceptors,
+} from '@angular/common/http';
 import { bootstrapApplication } from '@angular/platform-browser';
 import {
   PreloadAllModules,
@@ -12,6 +16,7 @@ import {
   provideIonicAngular,
 } from '@ionic/angular/standalone';
 
+import { mapboxTokenInterceptor } from '@app/interceptors/mapbox-token.interceptor';
 import { AppComponent } from './app/app.component';
 import { routes } from './app/app.routes';
 
@@ -20,6 +25,6 @@ bootstrapApplication(AppComponent, {
     { provide: RouteReuseStrategy, useClass: IonicRouteStrategy },
     provideIonicAngular(),
     provideRouter(routes, withPreloading(PreloadAllModules)),
-    provideHttpClient(withFetch()),
+    provideHttpClient(withFetch(), withInterceptors([mapboxTokenInterceptor])),
   ],
 });
